@@ -1,0 +1,6 @@
+[submodule "submodules/fastq2fasta"]
+	path = submodules/fastq2fasta
+	url = https://github.com/dantaki/fastq2fasta
+[submodule "submodules/sff2fastq"]
+	path = submodules/sff2fastq
+	url = https://github.com/indraniel/sff2fastq.git
