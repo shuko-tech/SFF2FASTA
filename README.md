@@ -33,10 +33,11 @@ git clone --recursive https://github.com/shuko-tech/SFF2FASTA.git
 cd ./SFF2FASTA
 ```
 
-# INSTALL DEPENDENCIES
+# BUILDING THE SUBMODULES
 ```
-python3 -m pip install glob json shutil tempfile argparse
+cd ./submodules/sff2fastq/ && make && cd ../../
 
+cd ./submodules/fastq2fasta/ && g++ src/fastq2fasta.cpp -o fastq2fasta && cd ../../
 ```
 
 # RUNNING THE TOOL
