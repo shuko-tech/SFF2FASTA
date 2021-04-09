@@ -60,7 +60,7 @@ usage: python3 ssf2fasta.py [-h] -i INPUT_SFF [-o OUTPUT_FASTA] [-b BATCH_SIZE]
 
 # KNOWN ISSUES
 
-To stop the process, the user current must spam ```ctrlc``` to stop every scheduled sub processing step. User must press ```ctrl-c``` twice as many times as there are files to process. 
+To stop the process, the user current must spam ```ctrl-c``` to stop every scheduled sub processing step. User must press ```ctrl-c``` twice as many times as there are files to process. 
 
 It's recomended that you test the tool with one file first to confirm it works, before globing a significant number of files.
 
