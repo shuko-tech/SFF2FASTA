@@ -112,7 +112,7 @@ def print_logger(mesg:str, log_file=LOG_DIR, verbosity:int=0):
 		log_file.write(f"{mesg}\n")
 	if verbosity == 1 or verbosity == 2:
 		# If verbosity level is set to 1 or 2 Print Output Message
-		print(f"{mesg}")
+		print(f"{mesg}\n")
 	else:
 		# If verbosity level is not 0, 1, or 3 Only Log Output Message
 		#	also handeled by argument parser
@@ -129,7 +129,7 @@ def sff2fastq(sff_path:str, fastq_path:str, args):
 
 	# Build sff2fastq shell command 
 	cmd = f"{SFF2FASTQ_EXE_PATH} -o {fastq_path} {sff_path}"
-	print(f"{cmd}")
+	print_logger(f"Running Command:\n{cmd}", log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
 	
 	try:
 		# Try executing command, return status
@@ -158,7 +158,7 @@ def fastq2fasta(fastq_path:str, fasta_path:str, args):
 
 	# Build sff2fastq shell command
 	cmd = f"{FASTQ2FASTA_EXE_PATH} -i {fastq_path} -o {fasta_path}"
-	print(f"{cmd}")
+	print_logger(f"Running Command:\n{cmd}", log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
 
 	try:
 		# Try executing command
@@ -194,6 +194,7 @@ def process_files(sff_filepaths:list, args)->int:
 	# Itterate through batches
 	for k in range(0, len(sff_filepaths), batch_size):
 
+		batch_sff_filenames = []
 		# Get Batch of File Paths
 		batch = sff_filepaths[k:k+batch_size]
 		print_logger(f"Now Processing Batch with Range [{k}:{k+batch_size}] ...", 
@@ -207,6 +208,7 @@ def process_files(sff_filepaths:list, args)->int:
 			# Split File Path into Directory, Filename, File Extention
 			sff_dir, sff_filename = os.path.split(sff_path)
 			sff_filename, sff_file_ext = os.path.splitext(sff_filename)
+			batch_sff_filenames.append(sff_filename)
 
 			# If no output directory is specified, use input directory for output
 			if not args.output_fasta is None:
@@ -247,7 +249,7 @@ def process_files(sff_filepaths:list, args)->int:
 				_res = sff2fastq(sff_path, fastq_path, args)
 			
 			# Check if sff2fastq program finished sucessfully
-			if _res is None:
+			if _res is None or _res != STATUS_SUCCESS:
 				print_logger(f"ERROR: Failed to Run sff2fasta.\n Continuing to process remainging files ...", 
 					log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
 				print_logger(f"{sff_path}", log_file=FAILED_FILES_LOG)
@@ -262,22 +264,39 @@ def process_files(sff_filepaths:list, args)->int:
 				_res = fastq2fasta(fastq_path, fasta_path, args)
 
 			# Check if sff2fastq program finished sucessfully
-			if _res is None:
+			if _res is None or _res != STATUS_SUCCESS:
 				print_logger(f"ERROR: Failed to Run sff2fasta.\n Continuing to process remainging files ...", 
 					log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
 				print_logger(f"{sff_path}", log_file=FAILED_FILES_LOG)
 				_status = STATUS_FAILURE
 				continue
+			
+			if not os.path.exists(fasta_path):
+				print_logger(f"ERROR: Failed to Run sff2fasta. Output FASTA File not Created.\n Continuing to process remainging files ...", 
+						log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
+				print_logger(f"{sff_path}", log_file=FAILED_FILES_LOG)
+				_status = STATUS_FAILURE
 
 			# Delete temporary FASTQ file 
 			os.remove(fastq_path)
 			
 		# Check Batch Processed Corectly
-		if not os.path.exists(fasta_path):
-			print_logger(f"ERROR: Failed to Run sff2fasta. Output FASTA File not Created.\n Continuing to process remainging files ...", 
+		batch_fasta_created = [
+			f for f in glob.glob(os.path.join(args.output_fasta, f"*.fasta")) 
+			if os.path.splitext(os.path.split(f)[1])[0] in batch_sff_filenames
+		]
+
+		# Check Content Length, Ignoring Files in Output Directory that dont Match filenames
+		if len(batch) == len(batch_fasta_created):
+			print_logger(f"Batch Procesed File Count Matches Expected ...", 
 					log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
-			print_logger(f"{sff_path}", log_file=FAILED_FILES_LOG)
-			_status = STATUS_FAILURE
+		else:
+			print_logger(f"Failure: Batch Processed File Count Did Not Match Expected ...", 
+					log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
+			
+			failed_list = [sff for sff in batch + batch_fasta_created if sff not in batch_fasta_created]
+			print_logger(f"Failed to Process in Batch [{k}:{k+batch_size}]: ", log_file=FAILED_FILES_LOG)
+			(print_logger(f"\t{f}", log_file=FAILED_FILES_LOG) for f in failed_list)
 
 	return STATUS_SUCCESS
 
