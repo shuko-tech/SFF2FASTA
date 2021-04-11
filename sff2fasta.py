@@ -35,6 +35,7 @@ import shutil
 import tempfile
 import argparse
 import datetime
+import subprocess
 
 # Shared Constants
 STATUS_SUCCESS = 0
@@ -53,10 +54,49 @@ LOG_DIR = "./logs/"
 PROCESS_LOG_FILE = None
 FAILED_FILES_LOG = None
 
+# Processes
+SFF2FASTQ_PROC = None
+FASTQ2FASTA_PROC = None
+
 #------------------------------------------------------------------------------
-def signal_handler(sig, frame):
-    print(f"SIGINT Recieved: Process Stoped!")
-    sys.exit(0)
+def exit_routine(v:int=1):
+	'''
+		SFF to FASTA Conversion Tool: Exit Routine Handler
+	'''
+	global SFF2FASTQ_PROC
+	global FASTQ2FASTA_PROC
+	global PROCESS_LOG_FILE
+	global FAILED_FILES_LOG
+	global TEMP_DIR
+
+	print_logger(f"Exit Routine Initiated...", log_file=PROCESS_LOG_FILE, verbosity=v)
+
+	if not SFF2FASTQ_PROC is None:
+		print_logger(f"Killing Subprocess: SFF2FASTQ", log_file=PROCESS_LOG_FILE, verbosity=v)
+		SFF2FASTQ_PROC.kill()
+		
+	if not FASTQ2FASTA_PROC is None:
+		print_logger(f"Killing Subprocess: FASTQ2FASTA", log_file=PROCESS_LOG_FILE, verbosity=v) 
+		FASTQ2FASTA_PROC.kill()
+
+	print_logger(f"Removing Temporary Directory", log_file=PROCESS_LOG_FILE, verbosity=v)
+	shutil.rmtree(TEMP_DIR)
+
+	print_logger(f"Exit Routine Finished.", log_file=PROCESS_LOG_FILE, verbosity=v)
+
+	PROCESS_LOG_FILE.close()
+	FAILED_FILES_LOG.close()
+		
+	sys.exit(0)
+
+#------------------------------------------------------------------------------
+def sigterm_handler(sig, frame):
+	'''
+		SFF to FASTA Conversion Tool: SIGTERM Handler
+	'''
+	print(f"SIGINT Recieved: Stoping Processes!")
+	
+	exit_routine()
 
 #------------------------------------------------------------------------------
 def print_logger(mesg:str, log_file=LOG_DIR, verbosity:int=0):
@@ -83,6 +123,7 @@ def sff2fastq(sff_path:str, fastq_path:str, args):
 	'''
 		SFF to FASTA Conversion Tool: Execute sff2fastq program
 	'''
+	global SFF2FASTQ_PROC
 	global PROCESS_LOG_FILE
 	global FAILED_FILES_LOG
 
@@ -92,12 +133,17 @@ def sff2fastq(sff_path:str, fastq_path:str, args):
 	
 	try:
 		# Try executing command, return status
-		_res = os.system(cmd)
+		#_res = os.system(cmd)
+		SFF2FASTQ_PROC = subprocess.Popen([f"{SFF2FASTQ_EXE_PATH}", "-o", f"{fastq_path}", f"{sff_path}"])
+		
+		print_logger(f"SFF2FASTQ: Processing ...", log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
+		_res = SFF2FASTQ_PROC.wait()
+
 	except:
 		# Something went wrong, return None
 		_res = None
 
-	print_logger(f"SFF2FASTQ Finished with exit code/mesg: {_res}", 
+	print_logger(f"SFF2FASTQ Finished with exit code/mesg: {_res if not _res is None else 'ERROR'}", 
 		log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
 	return _res
 
@@ -106,6 +152,7 @@ def fastq2fasta(fastq_path:str, fasta_path:str, args):
 	'''
 		SFF to FASTA Conversion Tool: Execute fastq2fasta program
 	'''
+	global FASTQ2FASTA_PROC
 	global PROCESS_LOG_FILE
 	global FAILED_FILES_LOG
 
@@ -115,13 +162,18 @@ def fastq2fasta(fastq_path:str, fasta_path:str, args):
 
 	try:
 		# Try executing command
-		_res = os.system(cmd)
+		#_res = os.system(cmd)
+		FASTQ2FASTA_PROC = subprocess.Popen([f"{FASTQ2FASTA_EXE_PATH}", "-i", f"{fastq_path}", "-o", f"{fasta_path}"])
+
+		print_logger(f"FASTQ2FASTA: Processing ...", log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
+		_res = FASTQ2FASTA_PROC.wait()
+
 	except:
 		# Something went wrong, return None
 		print(f"ERROR: Failed to Run fastq2fasta.")
 		_res = None
 
-	print_logger(f"FASTQ2FASTA Finished with exit code/mesg: {_res}", 
+	print_logger(f"FASTQ2FASTA Finished with exit code/mesg: {_res if not _res is None else 'ERROR'}", 
 		log_file=PROCESS_LOG_FILE, verbosity=args.verbosity)
 	return _res
 
@@ -315,7 +367,7 @@ def main():
 
 	_status = STATUS_SUCCESS
 
-	signal.signal(signal.SIGINT, signal_handler)
+	signal.signal(signal.SIGINT, sigterm_handler)
 
 	# Create Log Directory if it Does Not Already Exist
 	if not os.path.exists(LOG_DIR):
@@ -332,9 +384,7 @@ def main():
 	_status = run(args)
 
 	# Clean Up
-	PROCESS_LOG_FILE.close()
-	FAILED_FILES_LOG.close()
-	shutil.rmtree(TEMP_DIR)
+	exit_routine()
 
 	sys.exit(_status)
 
